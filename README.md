@@ -5,6 +5,7 @@ Javascript search engine
 
 depends on jQuery and javascript Porter Stemmer
 
+```js
 <script>
 	$(document).ready(function () {
 		$("#query").searchjs({
@@ -18,3 +19,4 @@ depends on jQuery and javascript Porter Stemmer
 </script>
 
 <input type="text" id="query" disabled="true" />
+```
