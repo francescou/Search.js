@@ -1,0 +1,239 @@
+/* Javascript Search Engine */
+var Search = (function () {
+
+	"use strict";
+	var dictionary = {};
+	var keys = [];
+	var chars = /[^a-zA-Z0-9]/g;
+	var settings = {};
+
+
+	var log = function (msg) {
+		if (settings.logger && console) {
+			console.log(msg);
+		}
+	};
+
+	// intersection of sorted arrays
+	var intersect_safe = function (a, b) {
+		var ai = 0, bi = 0;
+		var result = [];
+
+		while (ai < a.length && bi < b.length) {
+			if (a[ai] < b[bi]) {
+				ai++;
+			} else if (a[ai] > b[bi]) {
+				bi++;
+			} else {
+				/* they're equal */
+				result.push(a[ai]);
+				ai++;
+				bi++;
+			}
+		}
+		return result;
+	};
+
+	// union of sorted arrays
+	var union = function (a, b) {
+		var i = 0, j = 0;
+		var c = [];
+		var el;
+
+		while (i < a.length || j < b.length) {
+
+			if (i === a.length || a[i] >= b[j]) {
+				el = b[j];
+				++j;
+			} else {
+				el = a[i];
+				++i;
+			}
+
+			if (c[c.length - 1] !== el) {
+				c.push(el);
+			}
+		}
+		return c;
+	};
+
+	//binary search - look for prefix "find" in array of strings
+	var binarySearch = function (array, find) {
+		var i;
+		var low = 0;
+		var high = array.length - 1;
+
+		while (low <= high) {
+			var mid = parseInt((low + high) / 2, 10);
+			var mids = array[mid];
+			var re = new RegExp("^" + find, "g");
+			if (mids.match(re)) {
+				if (low === high) {
+					var arra = [];
+					for (i = mid; i < array.length; i++) {
+						var str = array[i];
+						if (str.match(re)) {
+							arra.push(str);
+						} else {
+							break;
+						}
+					}
+					return arra;
+				} else {
+					high = mid;
+				}
+			} else {
+				if (mids > find) {
+					high = mid - 1;
+				} else {
+					low = mid + 1;
+				}
+			}
+		}
+		return -1;
+	};
+
+	// check if string "s" is prefix of one of the terms in array "terms"
+	var isPrefix = function (s, terms) {
+		var re = new RegExp("^" + s, "g");
+		var ret = false;
+		$.each(terms, function (id, el) {
+			if (el.match(re)) {
+				ret = true;
+				return false;
+			}
+		});
+		return ret;
+	};
+
+	// remove from array keywords to be ignored - string less than minLength characters OR stop word 
+	var removeEmpty = function (arr) {
+		var cl = [];
+		$.each(arr, function (id, t) {
+			if (t.length >= settings.minLength && !isPrefix(t, settings.stopWords)) {
+				cl.push(t);
+			}
+		});
+
+		return cl;
+	};
+
+	// sorting criteria
+	var int_arr = function (a, b) {
+		return a >= b;
+	};
+
+	// search for "query" in dictionary. Then invokes "callback".
+	var search = function (query, callback, qta) {
+		var t = new Date().getTime();
+		query = query.toLowerCase();
+		var keywords = removeEmpty(query.split(chars));
+		var temp = [];
+
+		if (keywords.length > 0) {
+			$.each(keywords, function (id, keyword) {
+				var result = binarySearch(keys, settings.stem ? stemmer(keyword) : keyword, 1, 1);
+				var x = [];
+				
+				$.each(result, function (id) {
+					x = union(x, dictionary[result[id]]);
+				});
+
+				if (id === 0) {
+					temp = x;
+				} else {
+					temp = intersect_safe(temp.sort(int_arr), x.sort(int_arr));
+				}
+			});
+		}
+
+		log("search for query '" + query + "' completed in " + (new Date().getTime() - t) / 1000 + " sec.");
+		callback = callback || function (a) {
+			return ("result: " + JSON.stringify(a));
+		};
+		callback(temp, qta);
+	};
+
+	var flatten = function (o) {
+		var i, key, s;
+		if (typeof o === "string") {
+			s = o;
+		} else if (typeof o === "array") {
+			s = "";
+			for (i = 0; i < o.length; i++) {
+				s += flatten(o[i]) + " ";
+			}
+		} else if (typeof o === "object") {
+			s = "";
+			for (key in o) {
+				if (o.hasOwnProperty(key)) {
+					s += flatten(o[key]) + " ";
+				}
+			}
+		}
+		return s;
+	};
+
+	// create inverted index (dictionary) and lexicon (keys) using dataset
+	var createIndex = function (options, dataset, callback) {
+		settings = options;
+		var t = new Date().getTime();
+		var termIdx;
+		var key;
+
+		dictionary = {};
+		keys = [];
+
+		var count = 0;
+		for (key in dataset) {
+			if (dataset.hasOwnProperty(key)) {
+				log((++count / Object.keys(dataset).length * 100).toFixed() + "%");
+				var terms = flatten(dataset[key]).split(chars);
+
+				for (termIdx in terms) {
+					if (terms.hasOwnProperty(termIdx)) {
+						var term = terms[termIdx].toLowerCase();
+						term = settings.stem ? stemmer(term) : term;
+						if (term !== "" && term.length >= settings.minLength) {
+							if (dictionary.hasOwnProperty(term)) {
+							
+								//check that dictionary[term] does not already contain key
+								if(dictionary[term].indexOf(key) < 0){
+									dictionary[term].push(key);
+								}
+							} else {
+								dictionary[term] = [key];
+							}
+						}
+					}
+				}
+			}
+
+		}
+		$.each(settings.stopWords, function (idx, el) {
+			el = settings.stem ? stemmer(el) : el;
+			delete dictionary[el];
+		});
+		// the $.each will fail if the text contains the word "length"
+		for (var id in dictionary) {
+			var el = dictionary[id];
+			dictionary[id] = el.sort(int_arr);
+			keys.push(id);
+		}
+
+		keys.sort();
+		callback = callback || function () {
+			// no callback function defined
+		};
+		this.dictionary = dictionary;
+		this.keys  = keys;
+		log("index of " + Object.keys(dataset).length + " documents created in " + (new Date().getTime() - t) / 1000 + " sec.");
+		callback();
+	};
+
+	return {
+		"init" : createIndex,
+		"search" : search
+	};
+
+}());
