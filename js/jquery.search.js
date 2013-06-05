@@ -40,29 +40,26 @@
   Plugin.prototype.init = function () {
 
     var options = this.options,
-      element = $(this.element);
-
-    Search.init(options.engine, options.content, function () {
-      element
-        .attr("disabled", false)
-        .on("keyup", function () {
-          var query = $(this).val();
-          if (query.length < options.engine.minLength) {
-            options.display([]);
-          } else {
-            Search.search(query, function (results) {
-              options.display(results);
-            });
-          }
-        });
-    });
+      element = $(this.element),
+      s = new Search(options.engine, options.content, function () {
+        element
+          .attr("disabled", false)
+          .on("keyup", function () {
+            var query = $(this).val();
+            if (query.length < options.engine.minLength) {
+              options.display([]);
+            } else {
+              s.search(query, function (results) {
+                options.display(results);
+              });
+            }
+          });
+      });
   };
 
   $.fn[pluginName] = function (options) {
     return this.each(function () {
-      if (!$.data(this, 'plugin_' + pluginName)) {
-        $.data(this, 'plugin_' + pluginName, new Plugin(this, options));
-      }
+      $.data(this, 'plugin_' + pluginName, new Plugin(this, options));
     });
   };
 

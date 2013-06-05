@@ -1,13 +1,18 @@
 /*global $, stemmer*/
 /*jslint plusplus:true, vars: true, browser:true*/
 /* Javascript Search Engine */
-var Search = (function () {
+var Search = function (options, dataset, callback) {
 
   "use strict";
+
   var dictionary = {};
   var keys = [];
   var chars = /[^a-zA-Z0-9]/g;
-  var settings = {};
+  var settings = {
+    allowed: function (key) {
+      return true;
+    }
+  };
 
   var log = function (msg) {
     if (settings.logger && window.console) {
@@ -164,7 +169,7 @@ var Search = (function () {
     } else if (typeof o === "object") {
       s = "";
       for (key in o) {
-        if (o.hasOwnProperty(key)) {
+        if (o.hasOwnProperty(key) && settings.allowed(key)) {
           s += flatten(o[key]) + " ";
         }
       }
@@ -224,17 +229,17 @@ var Search = (function () {
     }
 
     keys.sort();
-    this.dictionary = dictionary;
-    this.keys  = keys;
     log("index of " + Object.keys(dataset).length + " documents created in " + (new Date().getTime() - t) / 1000 + " sec.");
     if (typeof callback === 'function') {
       callback();
     }
   };
 
+  // init indexes
+  createIndex(options, dataset, callback);
+
   return {
-    "init" : createIndex,
     "search" : search
   };
 
-}());
+};
